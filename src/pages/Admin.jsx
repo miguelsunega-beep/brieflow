@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Copy, ExternalLink, Trash2, ArrowLeft, X } from 'lucide-react'
@@ -68,17 +68,20 @@ function Modal({ onClose, onSave }) {
 
 export default function Admin() {
   const navigate = useNavigate()
-  const { forms, createForm, deleteForm } = useStore()
+  const { forms, createForm, deleteForm, loadForms, loading } = useStore()
   const [showModal, setShowModal] = useState(false)
   const [copied, setCopied] = useState(null)
+
+  useEffect(() => { loadForms() }, [])
 
   const copyLink = (id) => {
     navigator.clipboard.writeText(`${window.location.origin}/form/${id}`)
     setCopied(id); setTimeout(() => setCopied(null), 2000)
   }
-  const handleCreate = (data) => {
-    const id = createForm(data)
-    setTimeout(() => navigate(`/admin/form/${id}`), 200)
+
+  const handleCreate = async (data) => {
+    const id = await createForm(data)
+    if (id) navigate(`/admin/form/${id}`)
   }
 
   return (
@@ -93,7 +96,7 @@ export default function Admin() {
 
       <div style={{ borderBottom: '1px solid var(--border)', padding: '18px 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(237,234,228,0.9)', backdropFilter: 'blur(20px)', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <button onClick={() => navigate('/')} style={{ background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => navigate('/')} style={{ background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
             <ArrowLeft size={14} />
           </button>
           <div style={{ width: 1, height: 16, background: 'var(--border-strong)' }} />
@@ -110,8 +113,7 @@ export default function Admin() {
           <div>
             <motion.p {...fade(0)} className="tag-orange" style={{ marginBottom: 16 }}>— SEUS PROJETOS</motion.p>
             <motion.h1 {...fade(0.1)} style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(48px, 6vw, 80px)', fontWeight: 400, lineHeight: 0.9, letterSpacing: '0.02em' }}>
-              PAINEL<br />
-              <span style={{ color: 'var(--blue)' }}>ADMIN</span>
+              PAINEL<br /><span style={{ color: 'var(--blue)' }}>ADMIN</span>
             </motion.h1>
           </div>
           <motion.div {...fade(0.2)} style={{ display: 'flex', gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
@@ -128,67 +130,77 @@ export default function Admin() {
           </motion.div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 160px', gap: 16, padding: '0 20px 12px', marginBottom: 8 }}>
-          <span className="tag">PROJETO</span>
-          <span className="tag" style={{ textAlign: 'center' }}>STATUS</span>
-          <span className="tag" style={{ textAlign: 'center' }}>PERGUNTAS</span>
-          <span className="tag" style={{ textAlign: 'right' }}>AÇÕES</span>
-        </div>
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '60px 0' }}>
+            <p className="tag">CARREGANDO PROJETOS...</p>
+          </div>
+        )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-          <AnimatePresence>
-            {forms.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '100px 0', background: 'var(--bg)' }}>
-                <p style={{ fontFamily: 'var(--font-display)', fontSize: 32, marginBottom: 12, opacity: 0.2 }}>NENHUM PROJETO</p>
-                <p className="tag">Crie seu primeiro questionário acima</p>
-              </div>
-            ) : forms.map((form, i) => (
-              <motion.div key={form.id}
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: -20 }}
-                transition={{ delay: i * 0.05 }}
-                style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 160px', gap: 16, alignItems: 'center', padding: '20px', background: 'var(--bg)', transition: 'background 0.15s', cursor: 'default' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'var(--bg)'}>
-                <div>
-                  <p style={{ fontFamily: 'var(--font-display)', fontSize: 18, letterSpacing: '0.03em', marginBottom: 4 }}>{form.name.toUpperCase()}</p>
-                  <p className="tag">{form.clientName} — {new Date(form.createdAt).toLocaleDateString('pt-BR')}</p>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 2, background: form.status === 'completed' ? 'rgba(13,17,23,0.08)' : 'rgba(232,83,10,0.1)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: form.status === 'completed' ? 'var(--text)' : 'var(--orange)' }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: form.status === 'completed' ? 'var(--text)' : 'var(--orange)' }} />
-                    {form.status === 'completed' ? 'Concluído' : 'Pendente'}
-                  </span>
-                </div>
-                <p style={{ fontFamily: 'var(--font-display)', fontSize: 28, textAlign: 'center', color: 'var(--text-muted)' }}>{form.questions.length}</p>
-                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                  <button onClick={() => navigate(`/admin/form/${form.id}`)}
-                    style={{ background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius)', padding: '7px 12px', color: 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 0.15s' }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text)' }}>
-                    <ExternalLink size={11} /> Editar
-                  </button>
-                  <button onClick={() => copyLink(form.id)}
-                    style={{ background: copied === form.id ? 'var(--blue)' : 'transparent', border: `1px solid ${copied === form.id ? 'var(--blue)' : 'var(--border-strong)'}`, borderRadius: 'var(--radius)', padding: '7px 12px', color: copied === form.id ? 'white' : 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 0.2s' }}>
-                    <Copy size={11} /> {copied === form.id ? 'OK!' : 'Link'}
-                  </button>
-                  <button onClick={() => deleteForm(form.id)}
-                    style={{ background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius)', padding: '7px 9px', color: 'var(--orange)', cursor: 'pointer', transition: 'all 0.15s' }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--orange)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}>
-                    <Trash2 size={11} />
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
+        {!loading && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 160px', gap: 16, padding: '0 20px 12px', marginBottom: 8 }}>
+              <span className="tag">PROJETO</span>
+              <span className="tag" style={{ textAlign: 'center' }}>STATUS</span>
+              <span className="tag" style={{ textAlign: 'center' }}>PERGUNTAS</span>
+              <span className="tag" style={{ textAlign: 'right' }}>AÇÕES</span>
+            </div>
 
-        <motion.button {...fade(0.3)} onClick={() => setShowModal(true)}
-          style={{ width: '100%', marginTop: 8, padding: '18px', background: 'transparent', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-lg)', color: 'var(--text-muted)', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer', transition: 'all 0.2s' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)' }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-muted)' }}>
-          <Plus size={14} /> Novo projeto
-        </motion.button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+              <AnimatePresence>
+                {forms.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '100px 0', background: 'var(--bg)' }}>
+                    <p style={{ fontFamily: 'var(--font-display)', fontSize: 32, marginBottom: 12, opacity: 0.2 }}>NENHUM PROJETO</p>
+                    <p className="tag">Crie seu primeiro questionário acima</p>
+                  </div>
+                ) : forms.map((form, i) => (
+                  <motion.div key={form.id}
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, x: -20 }}
+                    transition={{ delay: i * 0.05 }}
+                    style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 160px', gap: 16, alignItems: 'center', padding: '20px', background: 'var(--bg)', transition: 'background 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'var(--bg)'}>
+                    <div>
+                      <p style={{ fontFamily: 'var(--font-display)', fontSize: 18, letterSpacing: '0.03em', marginBottom: 4 }}>{form.name.toUpperCase()}</p>
+                      <p className="tag">{form.clientName} — {new Date(form.createdAt).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 2, background: form.status === 'completed' ? 'rgba(13,17,23,0.08)' : 'rgba(232,83,10,0.1)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: form.status === 'completed' ? 'var(--text)' : 'var(--orange)' }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: form.status === 'completed' ? 'var(--text)' : 'var(--orange)' }} />
+                        {form.status === 'completed' ? 'Concluído' : 'Pendente'}
+                      </span>
+                    </div>
+                    <p style={{ fontFamily: 'var(--font-display)', fontSize: 28, textAlign: 'center', color: 'var(--text-muted)' }}>{form.questions.length}</p>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <button onClick={() => navigate(`/admin/form/${form.id}`)}
+                        style={{ background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius)', padding: '7px 12px', color: 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 0.15s' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)' }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text)' }}>
+                        <ExternalLink size={11} /> Editar
+                      </button>
+                      <button onClick={() => copyLink(form.id)}
+                        style={{ background: copied === form.id ? 'var(--blue)' : 'transparent', border: `1px solid ${copied === form.id ? 'var(--blue)' : 'var(--border-strong)'}`, borderRadius: 'var(--radius)', padding: '7px 12px', color: copied === form.id ? 'white' : 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 0.2s' }}>
+                        <Copy size={11} /> {copied === form.id ? 'OK!' : 'Link'}
+                      </button>
+                      <button onClick={() => deleteForm(form.id)}
+                        style={{ background: 'transparent', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius)', padding: '7px 9px', color: 'var(--orange)', cursor: 'pointer', transition: 'all 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--orange)'}
+                        onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-strong)'}>
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            <motion.button {...fade(0.3)} onClick={() => setShowModal(true)}
+              style={{ width: '100%', marginTop: 8, padding: '18px', background: 'transparent', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-lg)', color: 'var(--text-muted)', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer', transition: 'all 0.2s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-strong)'; e.currentTarget.style.color = 'var(--text-muted)' }}>
+              <Plus size={14} /> Novo projeto
+            </motion.button>
+          </>
+        )}
       </div>
 
       <AnimatePresence>{showModal && <Modal onClose={() => setShowModal(false)} onSave={handleCreate} />}</AnimatePresence>

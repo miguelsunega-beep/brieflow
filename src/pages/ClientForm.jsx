@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ChevronRight, ChevronLeft, CheckCircle, Download } from 'lucide-react'
 import { useStore } from '../store'
+import { supabase } from '../supabase'
 
 function GridLines() {
   return (
@@ -73,12 +74,43 @@ function ScaleInput({ value, onChange, min, max }) {
 export default function ClientForm() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { getForm, submitResponses } = useStore()
-  const form = getForm(id)
+  const { loadForms } = useStore()
+  const [form, setForm] = useState(null)
   const [current, setCurrent] = useState(0)
   const [responses, setResponses] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const [direction, setDirection] = useState(1)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('forms')
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (!error && data) {
+        setForm({
+          id: data.id,
+          name: data.name,
+          clientName: data.client_name,
+          clientEmail: data.client_email,
+          status: data.status,
+          questions: data.questions || [],
+          responses: data.responses,
+          createdAt: data.created_at,
+        })
+      }
+      setLoading(false)
+    }
+    load()
+  }, [id])
+
+  if (loading) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+      <p className="tag">CARREGANDO...</p>
+    </div>
+  )
 
   if (!form) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', flexDirection: 'column', gap: 16 }}>
@@ -92,10 +124,20 @@ export default function ClientForm() {
   const answer = responses[q?.id]
   const canAdvance = !q?.required || (answer !== undefined && answer !== '' && (Array.isArray(answer) ? answer.length > 0 : true))
 
-  const next = () => {
-    if (current < form.questions.length - 1) { setDirection(1); setCurrent(c => c + 1) }
-    else { submitResponses(id, responses); setSubmitted(true) }
+  const next = async () => {
+    if (current < form.questions.length - 1) {
+      setDirection(1); setCurrent(c => c + 1)
+    } else {
+      await supabase.from('forms').update({
+        responses,
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      }).eq('id', id)
+      await loadForms()
+      setSubmitted(true)
+    }
   }
+
   const back = () => { setDirection(-1); setCurrent(c => c - 1) }
   const setAnswer = (v) => setResponses(r => ({ ...r, [q.id]: v }))
 
@@ -131,7 +173,7 @@ export default function ClientForm() {
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
           style={{ fontSize: 16, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 40, fontWeight: 300 }}>
           Obrigado pelo tempo dedicado, <strong style={{ color: 'var(--text)', fontWeight: 500 }}>{form.clientName}</strong>.<br />
-          Suas respostas foram recebidas e serão usadas para criar sua identidade visual.
+          Suas respostas foram salvas e serão usadas para criar sua identidade visual.
         </motion.p>
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}
           style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>

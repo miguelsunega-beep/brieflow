@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { supabase } from './supabase'
 
 const SAMPLE_QUESTIONS = [
   { id: '1', type: 'text', label: 'Qual é o nome da sua marca ou empresa?', required: true },
@@ -12,48 +13,71 @@ const SAMPLE_QUESTIONS = [
 ]
 
 export const useStore = create((set, get) => ({
-  forms: [
-    {
-      id: 'demo-001',
-      name: 'Projeto Exemplo — Cafeteria Moderna',
-      clientName: 'João Silva',
-      clientEmail: 'joao@exemplo.com',
-      createdAt: new Date().toISOString(),
+  forms: [],
+  loading: false,
+
+  loadForms: async () => {
+    set({ loading: true })
+    const { data, error } = await supabase
+      .from('forms')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (!error && data) {
+      const forms = data.map(f => ({
+        id: f.id,
+        name: f.name,
+        clientName: f.client_name,
+        clientEmail: f.client_email,
+        status: f.status,
+        questions: f.questions || SAMPLE_QUESTIONS,
+        responses: f.responses,
+        createdAt: f.created_at,
+        completedAt: f.completed_at,
+      }))
+      set({ forms, loading: false })
+      return forms
+    }
+    set({ loading: false })
+    return []
+  },
+
+  createForm: async (data) => {
+    const id = `form-${Date.now()}`
+    const { error } = await supabase.from('forms').insert({
+      id,
+      name: data.name,
+      client_name: data.clientName,
+      client_email: data.clientEmail || '',
       status: 'pending',
       questions: SAMPLE_QUESTIONS,
-      responses: null,
-    }
-  ],
-  
-  createForm: (data) => {
-    const id = `form-${Date.now()}`
-    const newForm = {
-      id,
-      ...data,
-      createdAt: new Date().toISOString(),
-      status: 'pending',
-      questions: [...SAMPLE_QUESTIONS],
-      responses: null,
-    }
-    set(s => ({ forms: [...s.forms, newForm] }))
+    })
+    if (!error) await get().loadForms()
     return id
   },
 
-  updateForm: (id, updates) => set(s => ({
-    forms: s.forms.map(f => f.id === id ? { ...f, ...updates } : f)
-  })),
+  updateForm: async (id, updates) => {
+    const dbUpdates = {}
+    if (updates.questions !== undefined) dbUpdates.questions = updates.questions
+    if (updates.status !== undefined) dbUpdates.status = updates.status
+    if (updates.responses !== undefined) dbUpdates.responses = updates.responses
+    if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt
+    await supabase.from('forms').update(dbUpdates).eq('id', id)
+    await get().loadForms()
+  },
 
-  deleteForm: (id) => set(s => ({ forms: s.forms.filter(f => f.id !== id) })),
+  deleteForm: async (id) => {
+    await supabase.from('forms').delete().eq('id', id)
+    set(s => ({ forms: s.forms.filter(f => f.id !== id) }))
+  },
 
   getForm: (id) => get().forms.find(f => f.id === id),
 
-  submitResponses: (formId, responses) => {
-    set(s => ({
-      forms: s.forms.map(f =>
-        f.id === formId
-          ? { ...f, responses, status: 'completed', completedAt: new Date().toISOString() }
-          : f
-      )
-    }))
-  }
+  submitResponses: async (formId, responses) => {
+    await supabase.from('forms').update({
+      responses,
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+    }).eq('id', formId)
+    await get().loadForms()
+  },
 }))
